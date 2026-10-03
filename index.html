@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Play Count">
+<meta name="theme-color" content="#0f1a12">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<title>Play Counter</title>
+<style>
+  :root {
+    --bg: #0f1a12;
+    --panel: #1a2a1e;
+    --panel-2: #23382a;
+    --line: #2f4a37;
+    --text: #f1f5f2;
+    --muted: #9db3a4;
+    --accent: #3ddc84;
+    --accent-ink: #062611;
+    --warn: #ffb020;
+    --danger: #ff5c5c;
+    --out: #3a3f3c;
+    --out-text: #8a908c;
+    --done: #2e7d4f;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+    overscroll-behavior: none;
+  }
+  button, input { font: inherit; color: inherit; }
+  button { touch-action: manipulation; cursor: pointer; }
+
+  .app {
+    display: flex; flex-direction: column;
+    height: 100%;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  }
+
+  /* Top bar */
+  .topbar {
+    display: flex; gap: 8px; align-items: center;
+    padding: 10px 12px 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  .seg {
+    display: flex; background: var(--panel); border-radius: 10px; padding: 3px; gap: 3px;
+  }
+  .seg button {
+    border: 0; background: transparent; padding: 8px 12px; border-radius: 8px;
+    color: var(--muted); font-weight: 600; font-size: 15px;
+  }
+  .seg button.on { background: var(--panel-2); color: var(--text); box-shadow: 0 1px 0 rgba(255,255,255,.06) inset; }
+  .seg.half button.on { background: var(--accent); color: var(--accent-ink); }
+  .spacer { flex: 1; }
+
+  .main { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px; }
+  .view { display: none; }
+  .view.on { display: block; }
+
+  /* Status line */
+  .status {
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    margin-bottom: 10px; font-size: 14px; color: var(--muted);
+  }
+  .status b { color: var(--text); font-size: 16px; }
+  .pill {
+    padding: 4px 10px; border-radius: 999px; background: var(--panel); font-weight: 600; color: var(--text);
+  }
+  .pill.warn { background: var(--warn); color: #2b1d00; }
+  .pill.good { background: var(--accent); color: var(--accent-ink); }
+
+  .banner {
+    display: none; text-align: center; font-weight: 700; padding: 10px; border-radius: 10px;
+    background: var(--accent); color: var(--accent-ink); margin-bottom: 10px;
+  }
+  .banner.on { display: block; }
+
+  /* Player grid */
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px;
+    padding-bottom: 130px;
+  }
+  .pbtn {
+    position: relative;
+    border: 2px solid var(--line); background: var(--panel-2); border-radius: 12px;
+    padding: 8px 4px 6px; min-height: 76px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    transition: transform .06s;
+  }
+  .pbtn:active { transform: scale(.96); }
+  .pbtn .num { font-size: 28px; font-weight: 800; line-height: 1; }
+  .pbtn .nm { font-size: 11px; color: var(--muted); margin-top: 4px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pbtn .ct {
+    position: absolute; top: 4px; right: 6px; font-size: 11px; font-weight: 700; color: var(--muted);
+  }
+  .pbtn.met { border-color: var(--done); }
+  .pbtn.met .ct { color: var(--accent); }
+  .pbtn.out { background: var(--out); border-color: var(--danger); border-style: dashed; }
+  .pbtn.out .num { color: var(--out-text); text-decoration: line-through; text-decoration-thickness: 3px; }
+  .pbtn.out .nm::after { content: " · OFF"; color: var(--danger); font-weight: 700; }
+
+  /* Snap bar */
+  .snapbar {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    display: flex; gap: 10px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    background: linear-gradient(to top, var(--bg) 70%, rgba(15,26,18,0));
+  }
+  .snapbar.hide { display: none; }
+  .snap {
+    flex: 1; border: 0; border-radius: 16px; padding: 22px 0;
+    background: var(--accent); color: var(--accent-ink);
+    font-size: 28px; font-weight: 900; letter-spacing: 2px;
+    box-shadow: 0 6px 20px rgba(61,220,132,.25);
+  }
+  .snap:active { filter: brightness(.9); transform: scale(.99); }
+  .undo {
+    border: 2px solid var(--line); border-radius: 16px; background: var(--panel);
+    padding: 0 16px; font-weight: 700; color: var(--muted); font-size: 15px;
+  }
+  .undo:disabled { opacity: .35; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: calc(110px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    background: #000c; color: #fff; padding: 8px 16px; border-radius: 999px; font-weight: 600; font-size: 14px;
+    opacity: 0; transition: opacity .2s; pointer-events: none; white-space: nowrap;
+  }
+  .toast.on { opacity: 1; }
+
+  /* Counts view */
+  .summary { background: var(--panel); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+  .summary .big { font-size: 22px; font-weight: 800; }
+  .bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin-top: 8px; }
+  .bar > i { display: block; height: 100%; background: var(--warn); border-radius: 99px; }
+  .bar > i.full { background: var(--accent); }
+  .sortrow { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; color: var(--muted); font-size: 13px; }
+  .row {
+    display: grid; grid-template-columns: 46px 1fr auto; gap: 10px; align-items: center;
+    background: var(--panel); border-radius: 12px; padding: 10px 12px; margin-bottom: 6px;
+    border-left: 5px solid var(--warn);
+  }
+  .row.met { border-left-color: var(--accent); }
+  .row .rn { font-size: 22px; font-weight: 800; text-align: center; }
+  .row .rname { font-weight: 600; }
+  .row .rsub { font-size: 12px; color: var(--muted); }
+  .row .rc { text-align: right; }
+  .row .rc .v { font-size: 24px; font-weight: 800; }
+  .row .rc .v small { font-size: 13px; color: var(--muted); font-weight: 600; }
+  .row .need { font-size: 12px; color: var(--warn); font-weight: 700; }
+  .row.met .need { color: var(--accent); }
+  .adj { display: flex; gap: 6px; margin-top: 6px; justify-content: flex-end; }
+  .adj button {
+    width: 34px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2);
+    font-weight: 800; font-size: 18px; line-height: 1;
+  }
+  .edit-hint { font-size: 12px; color: var(--muted); text-align: center; margin: 12px 0 30px; }
+
+  /* Roster view */
+  .card { background: var(--panel); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+  .card h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .addform { display: grid; grid-template-columns: 80px 1fr auto; gap: 8px; }
+  input[type=text], input[type=number], input[inputmode] {
+    width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg);
+    font-size: 17px; -webkit-user-select: text; user-select: text;
+  }
+  .btn {
+    border: 0; border-radius: 10px; padding: 12px 16px; font-weight: 700;
+    background: var(--accent); color: var(--accent-ink);
+  }
+  .btn.ghost { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); }
+  .btn.danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+  .btn.block { width: 100%; margin-top: 8px; }
+  .rrow {
+    display: grid; grid-template-columns: 46px 1fr auto auto; gap: 10px; align-items: center;
+    padding: 10px 0; border-bottom: 1px solid var(--line);
+  }
+  .rrow:last-child { border-bottom: 0; }
+  .rrow .rn { font-size: 20px; font-weight: 800; text-align: center; }
+  .rrow.absent .rn, .rrow.absent .rname { opacity: .4; }
+  .here {
+    border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; font-size: 13px; font-weight: 700;
+    background: var(--panel-2); color: var(--accent);
+  }
+  .here.no { color: var(--muted); }
+  .del { border: 0; background: transparent; color: var(--danger); font-size: 20px; padding: 4px 6px; }
+  .setting { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; }
+  .setting input { width: 80px; text-align: center; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .empty { text-align: center; color: var(--muted); padding: 40px 20px; }
+  .err { color: var(--danger); font-size: 13px; min-height: 18px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="seg" id="tabs">
+      <button data-view="track" class="on">Track</button>
+      <button data-view="counts">Counts</button>
+      <button data-view="roster">Roster</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="seg half" id="halfSeg">
+      <button data-half="0" class="on">1st</button>
+      <button data-half="1">2nd</button>
+    </div>
+  </div>
+
+  <div class="main" id="main">
+    <!-- TRACK -->
+    <section class="view on" id="view-track">
+      <div class="banner" id="trackBanner"></div>
+      <div class="status">
+        <span>Play <b id="playNum">1</b> · tap who’s <b>OFF</b> the field</span>
+        <span class="pill" id="onField">11 on</span>
+      </div>
+      <div class="grid" id="grid"></div>
+    </section>
+
+    <!-- COUNTS -->
+    <section class="view" id="view-counts">
+      <div class="summary">
+        <div class="big" id="sumBig"></div>
+        <div class="muted" id="sumSub"></div>
+        <div class="bar"><i id="sumBar"></i></div>
+      </div>
+      <div class="sortrow">
+        <span id="countsHalfLabel"></span>
+        <div class="seg" id="sortSeg">
+          <button data-sort="need" class="on">Fewest</button>
+          <button data-sort="num">Jersey #</button>
+        </div>
+      </div>
+      <div id="countList"></div>
+      <div class="edit-hint">
+        <button class="btn ghost" id="toggleAdjust">Fix a count</button>
+      </div>
+    </section>
+
+    <!-- ROSTER -->
+    <section class="view" id="view-roster">
+      <div class="card">
+        <h2>Add player</h2>
+        <form class="addform" id="addForm" autocomplete="off">
+          <input id="inNum" inputmode="numeric" pattern="[0-9]*" placeholder="#" maxlength="3">
+          <input id="inName" type="text" placeholder="Last name" autocapitalize="words" enterkeyhint="done">
+          <button class="btn" type="submit">Add</button>
+        </form>
+        <div class="err" id="addErr"></div>
+      </div>
+
+      <div class="card">
+        <h2>Roster (<span id="rosterCount">0</span>)</h2>
+        <div class="muted" style="margin-bottom:6px">Mark a player “Out” if they aren’t at today’s game so they don’t count against the goal.</div>
+        <div id="rosterList"></div>
+      </div>
+
+      <div class="card">
+        <h2>Settings</h2>
+        <div class="setting">
+          <span>Plays needed per half</span>
+          <input id="setTarget" inputmode="numeric" pattern="[0-9]*" maxlength="2">
+        </div>
+        <div class="setting">
+          <span>Players on the field</span>
+          <input id="setOnField" inputmode="numeric" pattern="[0-9]*" maxlength="2">
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Game</h2>
+        <div class="muted">Starts a new game: clears all play counts for both halves. The roster is kept.</div>
+        <button class="btn danger block" id="newGame">New Game (reset counts)</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="snapbar" id="snapbar">
+    <button class="undo" id="undo" disabled>Undo</button>
+    <button class="snap" id="snap">SNAP</button>
+  </div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var KEY = "playCounter.v1";
+  var state = load();
+  var view = "track";
+  var sortMode = "need";
+  var adjusting = false;
+
+  function defaults() {
+    return {
+      players: [],          // {id, name, number, here}
+      counts: {},           // id -> [half1, half2]
+      plays: [0, 0],        // snaps recorded per half
+      history: [],          // [{half, ids}] for undo
+      half: 0,
+      sideline: [],         // ids tapped as off the field for the next snap
+      target: 7,
+      onField: 11
+    };
+  }
+
+  function load() {
+    try {
+      var s = JSON.parse(localStorage.getItem(KEY));
+      if (s && Array.isArray(s.players)) {
+        var d = defaults();
+        for (var k in d) if (!(k in s)) s[k] = d[k];
+        return s;
+      }
+    } catch (e) {}
+    return defaults();
+  }
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  function $(id) { return document.getElementById(id); }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function byNumber(a, b) { return Number(a.number) - Number(b.number) || a.name.localeCompare(b.name); }
+
+  function active() { return state.players.filter(function (p) { return p.here; }).sort(byNumber); }
+
+  function count(id, half) {
+    var c = state.counts[id];
+    return c ? c[half] : 0;
+  }
+
+  var toastTimer;
+  function toast(msg) {
+    var t = $("toast");
+    t.textContent = msg;
+    t.classList.add("on");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove("on"); }, 1300);
+  }
+
+  // ---------- Rendering ----------
+
+  function render() {
+    document.querySelectorAll("#tabs button").forEach(function (b) {
+      b.classList.toggle("on", b.dataset.view === view);
+    });
+    document.querySelectorAll("#halfSeg button").forEach(function (b) {
+      b.classList.toggle("on", Number(b.dataset.half) === state.half);
+    });
+    document.querySelectorAll(".view").forEach(function (v) {
+      v.classList.toggle("on", v.id === "view-" + view);
+    });
+    $("snapbar").classList.toggle("hide", view !== "track");
+    if (view === "track") renderTrack();
+    if (view === "counts") renderCounts();
+    if (view === "roster") renderRoster();
+  }
+
+  function goalStatus() {
+    var list = active();
+    var met = list.filter(function (p) { return count(p.id, state.half) >= state.target; }).length;
+    return { total: list.length, met: met, all: list.length > 0 && met === list.length };
+  }
+
+  function halfName(h) { return h === 0 ? "1st half" : "2nd half"; }
+
+  function renderTrack() {
+    var list = active();
+    var grid = $("grid");
+    if (!list.length) {
+      grid.innerHTML = '<div class="empty" style="grid-column:1/-1">No players yet.<br><br>' +
+        '<button class="btn" id="goRoster">Add your roster</button></div>';
+      $("goRoster").onclick = function () { view = "roster"; render(); };
+    } else {
+      var off = new Set(state.sideline);
+      grid.innerHTML = list.map(function (p) {
+        var c = count(p.id, state.half);
+        var cls = "pbtn" + (off.has(p.id) ? " out" : "") + (c >= state.target ? " met" : "");
+        return '<button class="' + cls + '" data-id="' + p.id + '">' +
+          '<span class="ct">' + c + '</span>' +
+          '<span class="num">' + esc(p.number) + '</span>' +
+          '<span class="nm">' + esc(p.name) + '</span></button>';
+      }).join("");
+    }
+
+    var onCount = list.filter(function (p) { return state.sideline.indexOf(p.id) === -1; }).length;
+    var pill = $("onField");
+    pill.textContent = onCount + " on";
+    pill.className = "pill " + (onCount === state.onField ? "good" : "warn");
+
+    $("playNum").textContent = state.plays[state.half] + 1;
+    $("undo").disabled = !state.history.some(function (h) { return h.half === state.half; });
+
+    var g = goalStatus();
+    var banner = $("trackBanner");
+    banner.classList.toggle("on", g.all);
+    banner.textContent = "✅ All players have " + state.target + "+ plays this half!";
+  }
+
+  function renderCounts() {
+    var list = active();
+    var h = state.half;
+    var g = goalStatus();
+
+    $("sumBig").textContent = g.all
+      ? "✅ Everyone has " + state.target + "+ plays!"
+      : g.met + " of " + g.total + " players at " + state.target + "+";
+    var remaining = list.reduce(function (s, p) { return s + Math.max(0, state.target - count(p.id, h)); }, 0);
+    $("sumSub").textContent = halfName(h) + " · " + state.plays[h] + " plays run" +
+      (g.all ? "" : " · " + remaining + " player-plays still needed");
+    var bar = $("sumBar");
+    bar.style.width = (g.total ? (g.met / g.total) * 100 : 0) + "%";
+    bar.className = g.all ? "full" : "";
+    $("countsHalfLabel").textContent = halfName(h).toUpperCase();
+
+    document.querySelectorAll("#sortSeg button").forEach(function (b) {
+      b.classList.toggle("on", b.dataset.sort === sortMode);
+    });
+
+    var sorted = list.slice();
+    if (sortMode === "need") {
+      sorted.sort(function (a, b) { return count(a.id, h) - count(b.id, h) || byNumber(a, b); });
+    }
+
+    if (!sorted.length) {
+      $("countList").innerHTML = '<div class="empty">No players on the roster yet.</div>';
+    } else {
+      $("countList").innerHTML = sorted.map(function (p) {
+        var c = count(p.id, h);
+        var other = count(p.id, 1 - h);
+        var met = c >= state.target;
+        var need = met ? "Done ✓" : "Needs " + (state.target - c);
+        return '<div class="row' + (met ? " met" : "") + '">' +
+          '<div class="rn">' + esc(p.number) + '</div>' +
+          '<div><div class="rname">' + esc(p.name) + '</div>' +
+          '<div class="rsub">' + (h === 0 ? "2nd" : "1st") + ' half: ' + other + '</div>' +
+          '<div class="bar"><i class="' + (met ? "full" : "") + '" style="width:' +
+            Math.min(100, (c / state.target) * 100) + '%"></i></div></div>' +
+          '<div class="rc"><div class="v">' + c + '<small>/' + state.target + '</small></div>' +
+          '<div class="need">' + need + '</div>' +
+          (adjusting ? '<div class="adj"><button data-adj="-1" data-id="' + p.id + '">−</button>' +
+            '<button data-adj="1" data-id="' + p.id + '">+</button></div>' : '') +
+          '</div></div>';
+      }).join("");
+    }
+    $("toggleAdjust").textContent = adjusting ? "Done fixing" : "Fix a count";
+  }
+
+  function renderRoster() {
+    var list = state.players.slice().sort(byNumber);
+    $("rosterCount").textContent = list.length;
+    $("rosterList").innerHTML = list.length ? list.map(function (p) {
+      return '<div class="rrow' + (p.here ? "" : " absent") + '">' +
+        '<div class="rn">' + esc(p.number) + '</div>' +
+        '<div class="rname">' + esc(p.name) + '</div>' +
+        '<button class="here' + (p.here ? "" : " no") + '" data-here="' + p.id + '">' + (p.here ? "Here" : "Out") + '</button>' +
+        '<button class="del" data-del="' + p.id + '" aria-label="Remove">✕</button></div>';
+    }).join("") : '<div class="empty" style="padding:16px">Add players above.</div>';
+    $("setTarget").value = state.target;
+    $("setOnField").value = state.onField;
+  }
+
+  // ---------- Actions ----------
+
+  $("tabs").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    view = b.dataset.view;
+    adjusting = false;
+    $("main").scrollTop = 0;
+    render();
+  });
+
+  $("halfSeg").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    var h = Number(b.dataset.half);
+    if (h === state.half) return;
+    state.half = h;
+    state.sideline = [];
+    save();
+    render();
+    toast("Now tracking " + halfName(h));
+  });
+
+  $("grid").addEventListener("click", function (e) {
+    var b = e.target.closest(".pbtn");
+    if (!b) return;
+    var id = b.dataset.id;
+    var i = state.sideline.indexOf(id);
+    if (i === -1) state.sideline.push(id); else state.sideline.splice(i, 1);
+    save();
+    renderTrack();
+  });
+
+  $("snap").addEventListener("click", function () {
+    var list = active();
+    if (!list.length) { toast("Add players first"); return; }
+    var off = new Set(state.sideline);
+    var ids = list.filter(function (p) { return !off.has(p.id); }).map(function (p) { return p.id; });
+    var h = state.half;
+    ids.forEach(function (id) {
+      if (!state.counts[id]) state.counts[id] = [0, 0];
+      state.counts[id][h]++;
+    });
+    state.plays[h]++;
+    state.history.push({ half: h, ids: ids });
+    if (state.history.length > 300) state.history.shift();
+    state.sideline = [];
+    save();
+    renderTrack();
+    $("main").scrollTop = 0;
+    toast("Play " + state.plays[h] + " recorded · " + ids.length + " players");
+  });
+
+  $("undo").addEventListener("click", function () {
+    var h = state.half;
+    for (var i = state.history.length - 1; i >= 0; i--) {
+      if (state.history[i].half !== h) continue;
+      var last = state.history.splice(i, 1)[0];
+      last.ids.forEach(function (id) {
+        if (state.counts[id] && state.counts[id][h] > 0) state.counts[id][h]--;
+      });
+      state.plays[h] = Math.max(0, state.plays[h] - 1);
+      // Restore who was on the sideline for that play so it can be corrected and re-snapped.
+      var onIds = new Set(last.ids);
+      state.sideline = active().filter(function (p) { return !onIds.has(p.id); }).map(function (p) { return p.id; });
+      save();
+      renderTrack();
+      toast("Undid play " + (state.plays[h] + 1));
+      return;
+    }
+  });
+
+  $("sortSeg").addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    sortMode = b.dataset.sort;
+    renderCounts();
+  });
+
+  $("toggleAdjust").addEventListener("click", function () {
+    adjusting = !adjusting;
+    renderCounts();
+  });
+
+  $("countList").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-adj]");
+    if (!b) return;
+    var id = b.dataset.id, h = state.half;
+    if (!state.counts[id]) state.counts[id] = [0, 0];
+    state.counts[id][h] = Math.max(0, state.counts[id][h] + Number(b.dataset.adj));
+    save();
+    renderCounts();
+  });
+
+  $("addForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var num = $("inNum").value.trim();
+    var name = $("inName").value.trim();
+    var err = $("addErr");
+    if (!/^\d{1,3}$/.test(num)) { err.textContent = "Enter a jersey number."; $("inNum").focus(); return; }
+    if (!name) { err.textContent = "Enter a last name."; $("inName").focus(); return; }
+    num = String(Number(num));
+    if (state.players.some(function (p) { return p.number === num; })) {
+      err.textContent = "#" + num + " is already on the roster.";
+      return;
+    }
+    err.textContent = "";
+    state.players.push({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      name: name, number: num, here: true
+    });
+    save();
+    $("inNum").value = "";
+    $("inName").value = "";
+    $("inNum").focus();
+    renderRoster();
+  });
+
+  $("rosterList").addEventListener("click", function (e) {
+    var here = e.target.closest("button[data-here]");
+    var del = e.target.closest("button[data-del]");
+    if (here) {
+      var p = state.players.find(function (x) { return x.id === here.dataset.here; });
+      p.here = !p.here;
+      state.sideline = state.sideline.filter(function (id) { return id !== p.id; });
+      save();
+      renderRoster();
+    } else if (del) {
+      var q = state.players.find(function (x) { return x.id === del.dataset.del; });
+      if (!confirm("Remove #" + q.number + " " + q.name + " from the roster?")) return;
+      state.players = state.players.filter(function (x) { return x.id !== q.id; });
+      delete state.counts[q.id];
+      state.sideline = state.sideline.filter(function (id) { return id !== q.id; });
+      save();
+      renderRoster();
+    }
+  });
+
+  function numSetting(input, key, min, max) {
+    input.addEventListener("change", function () {
+      var v = parseInt(input.value, 10);
+      if (isNaN(v) || v < min || v > max) { input.value = state[key]; return; }
+      state[key] = v;
+      save();
+    });
+  }
+  numSetting($("setTarget"), "target", 1, 99);
+  numSetting($("setOnField"), "onField", 1, 30);
+
+  $("newGame").addEventListener("click", function () {
+    if (!confirm("Start a new game? This clears all play counts for both halves.")) return;
+    state.counts = {};
+    state.plays = [0, 0];
+    state.history = [];
+    state.sideline = [];
+    state.half = 0;
+    save();
+    view = "track";
+    render();
+    toast("New game started");
+  });
+
+  render();
+
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    navigator.serviceWorker.register("sw.js").catch(function () {});
+  }
+})();
+</script>
+</body>
+</html>
