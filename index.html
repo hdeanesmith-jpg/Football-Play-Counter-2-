@@ -218,6 +218,11 @@
   .them .tobtns .toplus { background: var(--warn); color: #2b1d00; }
   .tobtns button:disabled { opacity: .35; }
   .tolog { font-size: 13px; color: var(--muted); margin-top: 10px; min-height: 18px; }
+  .teamrow { display: grid; grid-template-columns: 50px 1fr 70px; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .teamrow label { font-weight: 700; }
+  .teamrow input[inputmode] { text-align: center; }
+  .teamhead { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .teamhead span:last-child { text-align: center; }
   .reportbtns { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
   .sep { border: 0; border-top: 1px solid var(--line); margin: 16px 0 12px; }
   .err { color: var(--danger); font-size: 13px; min-height: 18px; margin-top: 6px; }
@@ -311,7 +316,18 @@
 
       <div class="card">
         <h2>Game</h2>
-        <div class="muted" style="margin-bottom:8px">Send yourself the game’s stats before resetting: every player’s plays by half, plays run, and timeouts.</div>
+        <div class="muted" style="margin-bottom:8px">Send yourself the game’s stats before resetting: teams, score, every player’s plays by half, and timeouts.</div>
+        <div class="teamrow teamhead"><span></span><span>Team name</span><span>Score</span></div>
+        <div class="teamrow">
+          <label for="homeName">Home</label>
+          <input id="homeName" type="text" data-game="homeName" placeholder="Home team" autocapitalize="words">
+          <input id="homeScore" data-game="homeScore" inputmode="numeric" pattern="[0-9]*" maxlength="3" placeholder="0">
+        </div>
+        <div class="teamrow">
+          <label for="awayName">Away</label>
+          <input id="awayName" type="text" data-game="awayName" placeholder="Visiting team" autocapitalize="words">
+          <input id="awayScore" data-game="awayScore" inputmode="numeric" pattern="[0-9]*" maxlength="3" placeholder="0">
+        </div>
         <input id="reportEmail" type="email" inputmode="email" autocapitalize="off" autocorrect="off" placeholder="Email address">
         <div class="err" id="reportErr"></div>
         <div class="reportbtns">
@@ -319,10 +335,10 @@
           <button class="btn ghost" id="shareReport">Share…</button>
         </div>
         <hr class="sep">
-        <div class="muted">Starts a new game: clears all play counts and timeouts for both halves. The roster is kept.</div>
+        <div class="muted">Starts a new game: clears play counts, timeouts, team names, and scores. The roster is kept.</div>
         <button class="btn danger block" id="newGame">New Game (reset counts)</button>
       </div>
-      <div class="muted" style="text-align:center;margin:4px 0 24px">App version 4</div>
+      <div class="muted" style="text-align:center;margin:4px 0 24px">App version 5</div>
     </section>
   </div>
 
@@ -355,6 +371,7 @@
       onField: 11,
       timeoutsPerHalf: 3,
       reportEmail: "",
+      game: { homeName: "", homeScore: "", awayName: "", awayScore: "" },
       // timeouts[team][half] = list of play numbers the timeout was called before
       timeouts: { us: [[], []], them: [[], []] }
     };
@@ -559,6 +576,7 @@
     $("setOnField").value = state.onField;
     $("setTimeouts").value = state.timeoutsPerHalf;
     $("reportEmail").value = state.reportEmail;
+    document.querySelectorAll("[data-game]").forEach(function (i) { i.value = state.game[i.dataset.game]; });
   }
 
   // ---------- Actions ----------
@@ -722,52 +740,50 @@
     var out = state.players.filter(function (p) { return !p.here; }).sort(byNumber);
     var L = [];
 
+    var g = state.game;
+    var home = g.homeName.trim(), away = g.awayName.trim();
+
     L.push("FOOTBALL PLAY COUNT REPORT");
     L.push(when);
-    L.push("Goal: " + t + " plays per half");
+    L.push("");
+    L.push("Home: " + (home || "—") + "  " + (g.homeScore !== "" ? g.homeScore : "—"));
+    L.push("Away: " + (away || "—") + "  " + (g.awayScore !== "" ? g.awayScore : "—"));
+    L.push("");
+    L.push("Plays run: 1st half " + state.plays[0] + ", 2nd half " + state.plays[1]);
+    L.push("Goal: " + t + " plays per half (* = under " + t + ")");
     L.push("");
 
-    [0, 1].forEach(function (h) {
-      var short = here.filter(function (p) { return count(p.id, h) < t; });
-      L.push(halfName(h).toUpperCase() + ": " + state.plays[h] + " plays run");
-      if (!here.length) L.push("  No players");
-      else if (!short.length) L.push("  All players reached " + t + " ✓");
-      else {
-        L.push("  " + short.length + " below " + t + ":");
-        short.forEach(function (p) {
-          L.push("   #" + p.number + " " + p.name + ": " + count(p.id, h) + " (needed " + (t - count(p.id, h)) + " more)");
-        });
-      }
-      L.push("");
-    });
-
-    L.push("PLAYERS (1st half / 2nd half / total)");
+    L.push("PLAYERS (1st / 2nd / Total)");
     here.forEach(function (p) {
       var a = count(p.id, 0), b = count(p.id, 1);
       L.push("#" + p.number + " " + p.name + ": " + a + (a < t ? "*" : "") + " / " + b + (b < t ? "*" : "") + " / " + (a + b));
     });
-    if (here.length) L.push("(* = under " + t + ")");
-    if (out.length) {
-      L.push("");
-      L.push("Not at game: " + out.map(function (p) { return "#" + p.number + " " + p.name; }).join(", "));
-    }
+    if (out.length) L.push("Not at game: " + out.map(function (p) { return "#" + p.number + " " + p.name; }).join(", "));
     L.push("");
 
-    L.push("TIMEOUTS (" + state.timeoutsPerHalf + " per team per half)");
+    L.push("TIMEOUTS");
     [0, 1].forEach(function (h) {
-      L.push(halfName(h) + ":");
-      TEAMS.forEach(function (tm) {
+      L.push(halfName(h) + ": " + TEAMS.map(function (tm) {
         var used = state.timeouts[tm.key][h];
-        L.push("  " + tm.label + ": " + used.length + " used" +
-          (used.length ? " (before play " + used.join(", ") + ")" : ""));
-      });
+        return tm.label + " " + used.length + (used.length ? " (before play " + used.join(", ") + ")" : "");
+      }).join(" · "));
     });
 
     return {
-      subject: "Play Count Report - " + now.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }),
+      subject: "Play Count Report - " + (home || away ? (away || "Away") + " at " + (home || "Home") + " - " : "") +
+        now.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }),
       body: L.join("\r\n")
     };
   }
+
+  document.querySelectorAll("[data-game]").forEach(function (i) {
+    i.addEventListener("input", function () {
+      var v = i.value;
+      if (/Score$/.test(i.dataset.game)) { v = v.replace(/\D/g, ""); i.value = v; }
+      state.game[i.dataset.game] = v;
+      save();
+    });
+  });
 
   $("reportEmail").addEventListener("change", function () {
     state.reportEmail = this.value.trim();
@@ -805,6 +821,7 @@
     state.history = [];
     state.sideline = [];
     state.timeouts = defaults().timeouts;
+    state.game = defaults().game;
     state.half = 0;
     save();
     view = "track";
