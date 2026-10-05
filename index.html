@@ -218,6 +218,8 @@
   .them .tobtns .toplus { background: var(--warn); color: #2b1d00; }
   .tobtns button:disabled { opacity: .35; }
   .tolog { font-size: 13px; color: var(--muted); margin-top: 10px; min-height: 18px; }
+  .reportbtns { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+  .sep { border: 0; border-top: 1px solid var(--line); margin: 16px 0 12px; }
   .err { color: var(--danger); font-size: 13px; min-height: 18px; margin-top: 6px; }
 </style>
 </head>
@@ -309,6 +311,14 @@
 
       <div class="card">
         <h2>Game</h2>
+        <div class="muted" style="margin-bottom:8px">Send yourself the game’s stats before resetting: every player’s plays by half, plays run, and timeouts.</div>
+        <input id="reportEmail" type="email" inputmode="email" autocapitalize="off" autocorrect="off" placeholder="Email address">
+        <div class="err" id="reportErr"></div>
+        <div class="reportbtns">
+          <button class="btn" id="emailReport">Email Report</button>
+          <button class="btn ghost" id="shareReport">Share…</button>
+        </div>
+        <hr class="sep">
         <div class="muted">Starts a new game: clears all play counts and timeouts for both halves. The roster is kept.</div>
         <button class="btn danger block" id="newGame">New Game (reset counts)</button>
       </div>
@@ -343,6 +353,7 @@
       target: 7,
       onField: 11,
       timeoutsPerHalf: 3,
+      reportEmail: "",
       // timeouts[team][half] = list of play numbers the timeout was called before
       timeouts: { us: [[], []], them: [[], []] }
     };
@@ -546,6 +557,7 @@
     $("setTarget").value = state.target;
     $("setOnField").value = state.onField;
     $("setTimeouts").value = state.timeoutsPerHalf;
+    $("reportEmail").value = state.reportEmail;
   }
 
   // ---------- Actions ----------
@@ -697,6 +709,93 @@
   numSetting($("setTarget"), "target", 1, 99);
   numSetting($("setOnField"), "onField", 1, 30);
   numSetting($("setTimeouts"), "timeoutsPerHalf", 1, 9);
+
+  // ---------- Game report ----------
+
+  function buildReport() {
+    var now = new Date();
+    var when = now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" }) +
+      " at " + now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    var t = state.target;
+    var here = active();
+    var out = state.players.filter(function (p) { return !p.here; }).sort(byNumber);
+    var L = [];
+
+    L.push("FOOTBALL PLAY COUNT REPORT");
+    L.push(when);
+    L.push("Goal: " + t + " plays per half");
+    L.push("");
+
+    [0, 1].forEach(function (h) {
+      var short = here.filter(function (p) { return count(p.id, h) < t; });
+      L.push(halfName(h).toUpperCase() + ": " + state.plays[h] + " plays run");
+      if (!here.length) L.push("  No players");
+      else if (!short.length) L.push("  All players reached " + t + " ✓");
+      else {
+        L.push("  " + short.length + " below " + t + ":");
+        short.forEach(function (p) {
+          L.push("   #" + p.number + " " + p.name + ": " + count(p.id, h) + " (needed " + (t - count(p.id, h)) + " more)");
+        });
+      }
+      L.push("");
+    });
+
+    L.push("PLAYERS (1st half / 2nd half / total)");
+    here.forEach(function (p) {
+      var a = count(p.id, 0), b = count(p.id, 1);
+      L.push("#" + p.number + " " + p.name + ": " + a + (a < t ? "*" : "") + " / " + b + (b < t ? "*" : "") + " / " + (a + b));
+    });
+    if (here.length) L.push("(* = under " + t + ")");
+    if (out.length) {
+      L.push("");
+      L.push("Not at game: " + out.map(function (p) { return "#" + p.number + " " + p.name; }).join(", "));
+    }
+    L.push("");
+
+    L.push("TIMEOUTS (" + state.timeoutsPerHalf + " per team per half)");
+    [0, 1].forEach(function (h) {
+      L.push(halfName(h) + ":");
+      TEAMS.forEach(function (tm) {
+        var used = state.timeouts[tm.key][h];
+        L.push("  " + tm.label + ": " + used.length + " used" +
+          (used.length ? " (before play " + used.join(", ") + ")" : ""));
+      });
+    });
+
+    return {
+      subject: "Play Count Report - " + now.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }),
+      body: L.join("\r\n")
+    };
+  }
+
+  $("reportEmail").addEventListener("change", function () {
+    state.reportEmail = this.value.trim();
+    save();
+  });
+
+  $("emailReport").addEventListener("click", function () {
+    var email = $("reportEmail").value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      $("reportErr").textContent = "Enter a valid email address.";
+      $("reportEmail").focus();
+      return;
+    }
+    $("reportErr").textContent = "";
+    state.reportEmail = email;
+    save();
+    var r = buildReport();
+    location.href = "mailto:" + encodeURIComponent(email) +
+      "?subject=" + encodeURIComponent(r.subject) + "&body=" + encodeURIComponent(r.body);
+  });
+
+  $("shareReport").addEventListener("click", function () {
+    var r = buildReport();
+    if (navigator.share) {
+      navigator.share({ title: r.subject, text: r.body }).catch(function () {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(r.body).then(function () { toast("Report copied"); });
+    }
+  });
 
   $("newGame").addEventListener("click", function () {
     if (!confirm("Start a new game? This clears all play counts for both halves.")) return;
