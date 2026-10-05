@@ -15,7 +15,8 @@ A simple iPhone app (installable web app) for tracking how many plays each playe
 4. **Timeouts tab**: tap **+ Us timeout** or **+ Them timeout** when a timeout is called. Each card shows how many each team has used and how many are left this half (default 3 per half, changeable in Roster → Settings). It also notes which play each timeout came before. Tap **−** to take one back.
 5. Use **1st / 2nd** at the top right to switch halves. Each half is counted separately.
 6. **Roster → Email Report**: before resetting, fill in the home and away team names and scores, enter an email address, and tap **Email Report**. Your phone's Mail app opens with the game report already written: teams and score, plays run each half, one list of every player's plays (1st half / 2nd half / total, with * for under the goal), players not at the game, and timeouts. Tap Send. The email address is remembered. **Share…** sends the same report through any app (Gmail, Messages, Notes).
-7. **Roster → New Game** clears the play counts, timeouts, team names, and scores, and keeps your roster.
+7. **Roster → Share Roster**: sends a link (by text, email, AirDrop, etc.) that loads your roster and settings into someone else's copy of the app, e.g. a parent covering a game you can't attend. They tap the link, confirm, then add the app to their home screen. If their home-screen app opens without the roster, they can paste the link into **Got a roster link? Paste it here** and tap **Load**.
+8. **Roster → New Game** clears the play counts, timeouts, team names, and scores, and keeps your roster.
 
 Everything is saved on the phone automatically. Closing the app or losing signal won't lose your counts.
 
