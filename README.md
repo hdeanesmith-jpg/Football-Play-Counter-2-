@@ -12,8 +12,9 @@ A simple iPhone app (installable web app) for tracking how many plays each playe
    - Made a mistake? **Undo** removes the last play and brings back that play's sideline selections so you can fix them and snap again.
    - The small number in the corner of each button is that player's count for the half. The border turns green once they reach the goal.
 3. **Counts tab**: shows every player's plays for the current half, with the players who need the most plays at the top. A banner appears when everyone has reached the goal. Use **Fix a count** to adjust a number by hand.
-4. Use **1st / 2nd** at the top right to switch halves. Each half is counted separately.
-5. **Roster → New Game** clears the counts and keeps your roster.
+4. **Timeouts tab**: tap **+ Us timeout** or **+ Them timeout** when a timeout is called. Each card shows how many each team has used and how many are left this half (default 3 per half, changeable in Roster → Settings). It also notes which play each timeout came before. Tap **−** to take one back.
+5. Use **1st / 2nd** at the top right to switch halves. Each half is counted separately.
+6. **Roster → New Game** clears the play counts and timeouts and keeps your roster.
 
 Everything is saved on the phone automatically. Closing the app or losing signal won't lose your counts.
 

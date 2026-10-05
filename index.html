@@ -58,9 +58,13 @@
     display: flex; background: var(--panel); border-radius: 10px; padding: 3px; gap: 3px;
   }
   .seg button {
-    border: 0; background: transparent; padding: 8px 12px; border-radius: 8px;
+    border: 0; background: transparent; padding: 8px 10px; border-radius: 8px;
     color: var(--muted); font-weight: 600; font-size: 15px;
   }
+  .topbar { gap: 6px; padding-left: 8px; padding-right: 8px; }
+  #tabs { flex: 1; min-width: 0; }
+  #tabs button { flex: 1; padding: 8px 2px; font-size: 13.5px; letter-spacing: -.2px; }
+  #halfSeg button { padding: 8px 8px; font-size: 14px; }
   .seg button.on { background: var(--panel-2); color: var(--text); box-shadow: 0 1px 0 rgba(255,255,255,.06) inset; }
   .seg.half button.on { background: var(--accent); color: var(--accent-ink); }
   .spacer { flex: 1; }
@@ -198,6 +202,22 @@
   .setting input { width: 80px; text-align: center; }
   .muted { color: var(--muted); font-size: 13px; }
   .empty { text-align: center; color: var(--muted); padding: 40px 20px; }
+  .tocard { background: var(--panel); border-radius: 14px; padding: 14px; margin-bottom: 12px; border-top: 5px solid var(--accent); }
+  .tocard.them { border-top-color: var(--warn); }
+  .tohead { display: flex; justify-content: space-between; align-items: baseline; }
+  .tohead .team { font-size: 22px; font-weight: 800; }
+  .tohead .left { font-size: 15px; font-weight: 700; color: var(--muted); }
+  .tohead .left.none { color: var(--danger); }
+  .dots { display: flex; gap: 10px; margin: 14px 0; }
+  .dots i { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--line); }
+  .dots i.used { background: var(--muted); border-color: var(--muted); }
+  .tobtns { display: grid; grid-template-columns: 70px 1fr; gap: 10px; }
+  .tobtns button { border: 0; border-radius: 12px; padding: 18px 0; font-size: 18px; font-weight: 800; }
+  .tobtns .tominus { background: var(--panel-2); color: var(--muted); border: 2px solid var(--line); }
+  .tobtns .toplus { background: var(--accent); color: var(--accent-ink); }
+  .them .tobtns .toplus { background: var(--warn); color: #2b1d00; }
+  .tobtns button:disabled { opacity: .35; }
+  .tolog { font-size: 13px; color: var(--muted); margin-top: 10px; min-height: 18px; }
   .err { color: var(--danger); font-size: 13px; min-height: 18px; margin-top: 6px; }
 </style>
 </head>
@@ -208,8 +228,8 @@
       <button data-view="track" class="on">Track</button>
       <button data-view="counts">Counts</button>
       <button data-view="roster">Roster</button>
+      <button data-view="timeouts">Timeouts</button>
     </div>
-    <div class="spacer"></div>
     <div class="seg half" id="halfSeg">
       <button data-half="0" class="on">1st</button>
       <button data-half="1">2nd</button>
@@ -247,6 +267,12 @@
       </div>
     </section>
 
+    <!-- TIMEOUTS -->
+    <section class="view" id="view-timeouts">
+      <div class="sortrow"><span id="toHalfLabel"></span><span id="toOtherHalf"></span></div>
+      <div id="toCards"></div>
+    </section>
+
     <!-- ROSTER -->
     <section class="view" id="view-roster">
       <div class="card">
@@ -275,11 +301,15 @@
           <span>Players on the field</span>
           <input id="setOnField" inputmode="numeric" pattern="[0-9]*" maxlength="2">
         </div>
+        <div class="setting">
+          <span>Timeouts per team per half</span>
+          <input id="setTimeouts" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+        </div>
       </div>
 
       <div class="card">
         <h2>Game</h2>
-        <div class="muted">Starts a new game: clears all play counts for both halves. The roster is kept.</div>
+        <div class="muted">Starts a new game: clears all play counts and timeouts for both halves. The roster is kept.</div>
         <button class="btn danger block" id="newGame">New Game (reset counts)</button>
       </div>
     </section>
@@ -311,7 +341,10 @@
       half: 0,
       sideline: [],         // ids tapped as off the field for the next snap
       target: 7,
-      onField: 11
+      onField: 11,
+      timeoutsPerHalf: 3,
+      // timeouts[team][half] = list of play numbers the timeout was called before
+      timeouts: { us: [[], []], them: [[], []] }
     };
   }
 
@@ -373,6 +406,7 @@
     if (view === "track") renderTrack();
     if (view === "counts") renderCounts();
     if (view === "roster") renderRoster();
+    if (view === "timeouts") renderTimeouts();
   }
 
   function goalStatus() {
@@ -465,6 +499,40 @@
     $("toggleAdjust").textContent = adjusting ? "Done fixing" : "Fix a count";
   }
 
+  var TEAMS = [{ key: "us", label: "Us" }, { key: "them", label: "Them" }];
+
+  function renderTimeouts() {
+    var h = state.half, max = state.timeoutsPerHalf;
+    $("toHalfLabel").textContent = halfName(h).toUpperCase();
+    $("toOtherHalf").textContent = (h === 0 ? "2nd" : "1st") + " half: Us " +
+      state.timeouts.us[1 - h].length + " · Them " + state.timeouts.them[1 - h].length;
+    $("toCards").innerHTML = TEAMS.map(function (t) {
+      var used = state.timeouts[t.key][h];
+      var left = Math.max(0, max - used.length);
+      var dots = "";
+      for (var i = 0; i < Math.max(max, used.length); i++) dots += '<i class="' + (i < used.length ? "used" : "") + '"></i>';
+      return '<div class="tocard ' + t.key + '">' +
+        '<div class="tohead"><span class="team">' + t.label + '</span>' +
+        '<span class="left' + (left === 0 ? " none" : "") + '">' + used.length + ' used · ' + left + ' left</span></div>' +
+        '<div class="dots">' + dots + '</div>' +
+        '<div class="tobtns">' +
+          '<button class="tominus" data-to="' + t.key + '" data-d="-1"' + (used.length ? "" : " disabled") + '>−</button>' +
+          '<button class="toplus" data-to="' + t.key + '" data-d="1"' + (left ? "" : " disabled") + '>+ ' + t.label + ' timeout</button>' +
+        '</div>' +
+        '<div class="tolog">' + (used.length ? "Called before play " + used.join(", ") : "No timeouts yet") + '</div>' +
+        '</div>';
+    }).join("");
+  }
+
+  $("toCards").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-to]");
+    if (!b || b.disabled) return;
+    var list = state.timeouts[b.dataset.to][state.half];
+    if (b.dataset.d === "1") list.push(state.plays[state.half] + 1); else list.pop();
+    save();
+    renderTimeouts();
+  });
+
   function renderRoster() {
     var list = state.players.slice().sort(byNumber);
     $("rosterCount").textContent = list.length;
@@ -477,6 +545,7 @@
     }).join("") : '<div class="empty" style="padding:16px">Add players above.</div>';
     $("setTarget").value = state.target;
     $("setOnField").value = state.onField;
+    $("setTimeouts").value = state.timeoutsPerHalf;
   }
 
   // ---------- Actions ----------
@@ -529,7 +598,7 @@
     save();
     renderTrack();
     $("main").scrollTop = 0;
-    toast("Play " + state.plays[h] + " recorded · " + ids.length + " players");
+    toast("Play " + state.plays[h] + " recorded · " + ids.length + (ids.length === 1 ? " player" : " players"));
   });
 
   $("undo").addEventListener("click", function () {
@@ -627,6 +696,7 @@
   }
   numSetting($("setTarget"), "target", 1, 99);
   numSetting($("setOnField"), "onField", 1, 30);
+  numSetting($("setTimeouts"), "timeoutsPerHalf", 1, 9);
 
   $("newGame").addEventListener("click", function () {
     if (!confirm("Start a new game? This clears all play counts for both halves.")) return;
@@ -634,6 +704,7 @@
     state.plays = [0, 0];
     state.history = [];
     state.sideline = [];
+    state.timeouts = defaults().timeouts;
     state.half = 0;
     save();
     view = "track";
