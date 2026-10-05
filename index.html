@@ -322,6 +322,7 @@
         <div class="muted">Starts a new game: clears all play counts and timeouts for both halves. The roster is kept.</div>
         <button class="btn danger block" id="newGame">New Game (reset counts)</button>
       </div>
+      <div class="muted" style="text-align:center;margin:4px 0 24px">App version 4</div>
     </section>
   </div>
 
@@ -814,7 +815,19 @@
   render();
 
   if ("serviceWorker" in navigator && location.protocol !== "file:") {
-    navigator.serviceWorker.register("sw.js").catch(function () {});
+    var hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(function (reg) {
+      // Home-screen apps stay open in the background, so check for updates whenever the app is reopened.
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "visible") reg.update().catch(function () {});
+      });
+    }).catch(function () {});
+    // A new version took over: reload once so it shows up right away.
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (!hadController) return;
+      hadController = false;
+      location.reload();
+    });
   }
 })();
 </script>
