@@ -377,7 +377,7 @@
         <div class="muted">Starts a new game: clears play counts, timeouts, team names, and scores. The roster is kept.</div>
         <button class="btn danger block" id="newGame">New Game (reset counts)</button>
       </div>
-      <div class="muted" style="text-align:center;margin:4px 0 24px">App version 7</div>
+      <div class="muted" style="text-align:center;margin:4px 0 24px">App version 8</div>
     </section>
   </div>
 
@@ -417,6 +417,7 @@
       onField: 11,
       timeoutsPerHalf: 3,
       reportEmail: "",
+      log: [],              // [{t: timestamp, h: half, m: message}] for the report's activity log
       game: { homeName: "", homeScore: "", awayName: "", awayScore: "" },
       // timeouts[team][half] = list of play numbers the timeout was called before
       timeouts: { us: [[], []], them: [[], []] }
@@ -651,6 +652,7 @@
     if (h === state.half) return;
     state.half = h;
     state.sideline = [];
+    logEvent("Switched to " + halfName(h));
     save();
     render();
     toast("Now tracking " + halfName(h));
@@ -665,6 +667,11 @@
     save();
     renderTrack();
   });
+
+  function logEvent(msg) {
+    state.log.push({ t: Date.now(), h: state.half, m: msg });
+    if (state.log.length > 1000) state.log.shift();
+  }
 
   var snapLockUntil = 0;
   var flashTimer;
@@ -694,13 +701,19 @@
 
   $("snap").addEventListener("click", function () {
     // Ignore extra taps right after a snap (the confirmation screen is showing).
-    if (Date.now() < snapLockUntil) return;
+    if (Date.now() < snapLockUntil) {
+      logEvent("SNAP tap ignored (double tap)");
+      save();
+      return;
+    }
     var list = active();
     if (!list.length) { toast("Add players first"); return; }
     var off = new Set(state.sideline);
     var ids = list.filter(function (p) { return !off.has(p.id); }).map(function (p) { return p.id; });
     var need = state.onField;
     if (ids.length !== need) {
+      logEvent("SNAP not recorded (" + ids.length + " on field)");
+      save();
       if (list.length < need) rejectSnap("Only " + list.length + " players here. Change “Players on the field” in Roster.");
       else if (ids.length > need) rejectSnap("Not recorded: " + ids.length + " on the field. Tap " + (ids.length - need) + " more off.");
       else rejectSnap("Not recorded: only " + ids.length + " on the field. Need " + need + ".");
@@ -715,6 +728,7 @@
     state.history.push({ half: h, ids: ids });
     if (state.history.length > 300) state.history.shift();
     state.sideline = [];
+    logEvent("Play " + state.plays[h] + " recorded");
     save();
     snapLockUntil = Date.now() + 1000;
     showFlash("PLAY " + state.plays[h] + " RECORDED", ids.length + " players · " + halfName(h));
@@ -735,6 +749,7 @@
       // Restore who was on the sideline for that play so it can be corrected and re-snapped.
       var onIds = new Set(last.ids);
       state.sideline = active().filter(function (p) { return !onIds.has(p.id); }).map(function (p) { return p.id; });
+      logEvent("Undo: play " + (state.plays[h] + 1) + " removed");
       save();
       renderTrack();
       toast("Undid play " + (state.plays[h] + 1));
@@ -759,7 +774,12 @@
     if (!b) return;
     var id = b.dataset.id, h = state.half;
     if (!state.counts[id]) state.counts[id] = [0, 0];
-    state.counts[id][h] = Math.max(0, state.counts[id][h] + Number(b.dataset.adj));
+    var before = state.counts[id][h];
+    state.counts[id][h] = Math.max(0, before + Number(b.dataset.adj));
+    if (state.counts[id][h] !== before) {
+      var pl = state.players.find(function (x) { return x.id === id; });
+      logEvent("Count fixed: #" + pl.number + " " + pl.name + " " + before + " → " + state.counts[id][h]);
+    }
     save();
     renderCounts();
   });
@@ -860,6 +880,14 @@
       }).join(" · "));
     });
 
+    L.push("");
+    L.push("ACTIVITY LOG");
+    if (!state.log.length) L.push("No activity recorded");
+    state.log.forEach(function (e) {
+      var time = new Date(e.t).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" });
+      L.push(time + "  " + (e.h === 0 ? "1st" : "2nd") + "  " + e.m);
+    });
+
     return {
       subject: "Play Count Report - " + (home || away ? (away || "Away") + " at " + (home || "Home") + " - " : "") +
         now.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }),
@@ -913,6 +941,7 @@
     state.sideline = [];
     state.timeouts = defaults().timeouts;
     state.game = defaults().game;
+    state.log = [];
     state.half = 0;
     save();
     view = "track";
@@ -973,7 +1002,7 @@
       return { id: Date.now().toString(36) + k + Math.random().toString(36).slice(2, 5), name: p.name, number: p.number, here: true };
     });
     state.counts = {}; state.plays = [0, 0]; state.history = []; state.sideline = [];
-    state.timeouts = d.timeouts; state.game = d.game; state.half = 0;
+    state.timeouts = d.timeouts; state.game = d.game; state.half = 0; state.log = [];
     if (data.target) state.target = data.target;
     if (data.onField) state.onField = data.onField;
     if (data.timeouts) state.timeoutsPerHalf = data.timeouts;
