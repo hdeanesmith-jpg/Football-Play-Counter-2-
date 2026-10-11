@@ -9,6 +9,8 @@ A simple iPhone app (installable web app) for tracking how many plays each playe
    - Before each play, tap the number of every player who is **on the sideline** (they turn gray with a red dashed border).
    - The pill at the top shows how many are on the field. It turns green when the number matches your field size (default 11).
    - When the ball is snapped, hit **SNAP**. Every player you *didn't* tap gets +1 play, and the screen resets for the next play.
+   - SNAP only records a play when exactly 11 players are on the field (the "Players on the field" setting). Otherwise the button turns orange and says what to fix, e.g. "13 ON · TAP 2 MORE OFF", and tapping it records nothing.
+   - A recorded play shows a big green ✓ **PLAY 12 RECORDED** screen for a second. Extra taps while it's showing are ignored, so an accidental double tap can't count a play twice.
    - Made a mistake? **Undo** removes the last play and brings back that play's sideline selections so you can fix them and snap again.
    - The small number in the corner of each button is that player's count for the half. The border turns green once they reach the goal.
 3. **Counts tab**: shows every player's plays for the current half, with the players who need the most plays at the top. A banner appears when everyone has reached the goal. Use **Fix a count** to adjust a number by hand.
